@@ -73,9 +73,9 @@ def main(argv):
     log.info("Initializing " + os.path.basename(__file__) + "...")
 
 
-    if (not debug):
-        os.system("modprobe w1-gpio")
-        os.system("modprobe w1-therm")
+    # if (not debug):
+    #     os.system("modprobe w1-gpio")
+    #     os.system("modprobe w1-therm")
 
     if (debug):
         base_dir = 'C:\\Users\\kenny\\Documents\\dev\\PiTemp\\'
