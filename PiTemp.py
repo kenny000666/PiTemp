@@ -77,7 +77,10 @@ def main(argv):
         os.system("modprobe w1-gpio")
         os.system("modprobe w1-therm")
 
-    base_dir = 'C:\\Users\\kenny\\Documents\\dev\\PiTemp\\'
+    if (debug):
+        base_dir = 'C:\\Users\\kenny\\Documents\\dev\\PiTemp\\'
+    else:
+        base_dir = '/sys/bus/w1/devices/'
     tempfiles = glob.glob(base_dir + '28*/w1_slave', recursive=True)
     
     for dir in tempfiles:
