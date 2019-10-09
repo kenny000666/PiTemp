@@ -20,7 +20,7 @@ def initLogger(name, file):
         fileHandler = logging.handlers.RotatingFileHandler(filename=os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/" + name + ".log"),maxBytes=1000,backupCount=10)
         log.addHandler(fileHandler)
     log.addHandler(soh)
-    log.setLevel(logging.INFO)
+    log.setLevel(logging.DEBUG)
 
 def read_temp_raw(file):
     f = open(file, 'r')
@@ -46,76 +46,102 @@ def main(argv):
     logToFile = False
     debug = False
     unit = 'c'
+    configPath = None
+    topic = None
+    host = None
+    port = None
 
     if (argv != None):
         try:
-            opts, args = getopt.getopt(argv, "hodu")
+            opts, args = getopt.getopt(argv, 'hodu', ['Config=', 'Topic=', 'Host=', 'Port=' ] )
+
+            for opt, arg in opts:
+                if opt in '-h':
+                    print(os.path.basename(__file__) + " -h -o -d -u --Config --Topic --Host --Port")
+                    sys.exit(2)
+                elif (opt == '-o'):
+                    logToFile = True
+                elif (opt == '-d'):
+                    debug = True
+                elif (opt == 'u'):
+                    if (arg == 'c'):
+                        unit = 'c'
+                    else: unit = 'f'
+                elif (opt == '--Config'):
+                    configPath = arg
+                elif (opt == '--Topic'):
+                    topic = arg
+                elif (opt == '--Host'):
+                    host = arg
+                elif (opt == '--Port'):
+                    port = arg
+
+            if (not debug):
+                if (configPath == None and (topic == None or host == None or port == None)):
+                    raise Exception('No Config and MQTT Parameters not set')
+
         except getopt.GetoptError:
-            print(os.path.basename(__file__) + " -h -o -d -u")
+            print(os.path.basename(__file__) + " -h -o -d -u --Config --Topic --Host --Port")
             sys.exit(1)
-
-        for opt, arg in opts:
-            if opt in '-h':
-                print(os.path.basename(__file__) + " -h -o -d -u")
-                sys.exit(2)
-            elif (opt == '-o'):
-                logToFile = True
-            elif (opt == '-d'):
-                debug = True
-            elif (opt == 'u'):
-                if (arg == 'c'):
-                    unit = 'c'
-                else: unit = 'f'
-
-
+        except Exception as e:
+            print("Error reading parameters")
+            print(e) 
+            sys.exit(1)
 
     initLogger(os.path.basename(__file__), logToFile)
     log.info("Initializing " + os.path.basename(__file__) + "...")
 
 
-    # if (not debug):
-    #     os.system("modprobe w1-gpio")
-    #     os.system("modprobe w1-therm")
+    if (not debug):
+        os.system("modprobe w1-gpio")
+        os.system("modprobe w1-therm")
 
     if (debug):
         base_dir = 'C:\\Users\\kenny\\Documents\\dev\\PiTemp\\'
     else:
         base_dir = '/sys/bus/w1/devices/'
-    tempfiles = glob.glob(base_dir + '28*/w1_slave', recursive=True)
-    
-    for dir in tempfiles:
-        log.info("Dir Name: " + dir) 
- 
-    cfg = configparser.ConfigParser(
-            {"client_id": os.path.basename(__file__) + str(os.getpid()), "hostname": "mqtt", "port": "1883", "auth": "False",
-             "retain": "False", "qos": "0"})
-    cfg.optionxform = str
-    cfg.read(os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/mqtt.conf"))
-    
-    client_id = cfg.get("mqtt", "client_id")
-    host = cfg.get("mqtt", "hostname")
-    port = eval(cfg.get("mqtt", "port"))
-    topic = cfg.get("mqtt", "topic")
-    qos = eval(cfg.get("mqtt", "qos"))
-    retain = eval(cfg.get("mqtt", "retain"))
-    if eval(cfg.get("mqtt", "auth")):
-        auth = {"username": cfg.get("mqtt", "user"), "password": cfg.get("mqtt", "password")}
-    else:
-        auth = None
 
-    
+     
+    if (configPath != None):
+        cfg = configparser.ConfigParser()
+        #        {"client_id": os.path.basename(__file__) + str(os.getpid()), "hostname": "mqtt", "port": "1883", "auth": "False",
+        #        "retain": "False", "qos": "0"})
+        cfg.optionxform = str
+        try:
+            cfg.read(configPath)
+            client_id = cfg.get("mqtt", "client_id")
+            host = cfg.get("mqtt", "hostname")
+            port = eval(cfg.get("mqtt", "port"))
+            topic = cfg.get("mqtt", "topic")
+            qos = eval(cfg.get("mqtt", "qos"))
+            retain = eval(cfg.get("mqtt", "retain"))
+            if eval(cfg.get("mqtt", "auth")):
+                auth = {"username": cfg.get("mqtt", "user"), "password": cfg.get("mqtt", "password")}
+            else:
+                auth = None
+        except Exception as e:
+            log.error("Error while reading Config")
+            log.error(e)      
+            exit()  
+
+
     while True:
         try:
             mqttmsg = []
-            count = 1
+            tempfiles = glob.glob(base_dir + '28*/w1_slave', recursive=True)
             for file in tempfiles:
+                probeName = os.path.basename(os.path.dirname(file))
                 temperature = read_temp(file, unit)
-                log.info("Probe " + str(count) + " : " + str(temperature))
-                count=count+1
-                msg = [{"topic": topic + "/Probe" + str(count) , "payload": "{ unit: " + unit + " value : " + str(temperature) + "}" , "qos": qos, "retain": retain}]
-                mqttmsg.append(msg)
-            if (not debug):
-                publish.multiple(mqttmsg, hostname=host, port=port, client_id=client_id, auth=auth)
+                log.debug( probeName + " : " + str(temperature))
+
+                
+                if (not debug or host != None):
+                    msg = [{"topic": topic + "/" + probeName , "payload": "{ unit: " + unit + " value : " + str(temperature) + "}" , "qos": 2, "retain": "false"}]
+                    mqttmsg.append(msg)
+            if (not debug or host != None):
+                log.debug("Publishing to %s:%s %s", host, port, os.path.basename(__file__) + str(os.getpid()))
+                publish.multiple(mqttmsg, hostname="mqtt", port=int(port), client_id=os.path.basename(__file__) + str(os.getpid()), auth=False, transport="tcp")
+                log.info("Message Published")
             time.sleep(5)
         except Exception as e:
             log.error("Error updating and publishing message")
