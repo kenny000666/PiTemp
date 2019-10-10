@@ -7,9 +7,15 @@ import time
 import logging
 import glob
 import paho.mqtt.publish as publish
+import paho.mqtt.client as Client
 import configparser
+import atexit
 
 log = None
+mqttClient = None
+
+def exit_handler():
+    mqttClient.
 
 def initLogger(name, file):
     global log
@@ -20,7 +26,7 @@ def initLogger(name, file):
         fileHandler = logging.handlers.RotatingFileHandler(filename=os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/" + name + ".log"),maxBytes=1000,backupCount=10)
         log.addHandler(fileHandler)
     log.addHandler(soh)
-    log.setLevel(logging.DEBUG)
+    log.setLevel(logging.info)
 
 def read_temp_raw(file):
     f = open(file, 'r')
@@ -53,14 +59,23 @@ def main(argv):
 
     if (argv != None):
         try:
-            opts, args = getopt.getopt(argv, 'hodu', ['Config=', 'Topic=', 'Host=', 'Port=' ] )
+            opts, args = getopt.getopt(argv, 'hodul:', ['Config=', 'Topic=', 'Host=', 'Port=' ] )
 
             for opt, arg in opts:
                 if opt in '-h':
-                    print(os.path.basename(__file__) + " -h -o -d -u --Config --Topic --Host --Port")
+                    print(os.path.basename(__file__) + " -h -o -d -u -l --Config --Topic --Host --Port")
                     sys.exit(2)
                 elif (opt == '-o'):
                     logToFile = True
+                elif opt == '-l':
+                    if arg == 'i':
+                        logLevel = 'info'
+                    elif arg == 'd':
+                        logLevel = 'debug'
+                    elif arg == 'e':
+                        logLevel = 'error'
+                    elif arg == 'w':
+                        logLevel = 'warn'
                 elif (opt == '-d'):
                     debug = True
                 elif (opt == 'u'):
@@ -124,10 +139,18 @@ def main(argv):
             log.error(e)      
             exit()  
 
+    global mqttClient = Client.Client(client_id=os.path.basename(__file__))
+    try:
+        mqttClient.connect(host,port=int(port))
+        connected = True
+    except Exception as e:
+        log.error("Error connecting to mqtt broker")
+        log.error(e)
+        connected = False
 
     while True:
         try:
-            mqttmsg = []
+            
             tempfiles = glob.glob(base_dir + '28*/w1_slave', recursive=True)
             for file in tempfiles:
                 probeName = os.path.basename(os.path.dirname(file))
@@ -135,15 +158,16 @@ def main(argv):
                 log.debug( probeName + " : " + str(temperature))
 
                 
-                if (not debug or host != None):
-                    msg = {"topic": topic + "/" + probeName , "payload": """{ "unit" : """ + unit + """",  "value" : """ + str(temperature) + "}" , "qos": 2, 'retain': "false"}
-                    #msg = {"topic: test", "payload: test"}
-                    log.debug("Message: %s", msg)
-                    mqttmsg.append(msg)
-            #if (not debug or host != None):
-                    log.debug("Publishing to %s:%s %s", host, port, os.path.basename(__file__) + str(os.getpid()))
-                    publish.single(msg, hostname=host, port=int(port), client_id=os.path.basename(__file__) + str(os.getpid()), auth=False, transport="tcp")
-                    log.info("Message Published")
+                if (not debug or connected):
+                    #msg = {"topic": topic + "/" + probeName , "payload": { "unit" : unit,  "value" : temperature } , "qos": 2, 'retain': "false"}
+                    #msg = {'topic': 'test', 'payload': 'test'}
+                    #log.debug("Message: %s", msg)
+                    #mqttmsg.append({'topic': 'test', 'payload': 'test'})
+            
+                    #log.debug("Publishing to %s:%s %s", host, port, os.path.basename(__file__) + str(os.getpid()))
+                    mqttClient.publish(topic + "/" + probeName, payload=str(temperature), qos=1)
+                    
+                    log.debug("Message Published")
         except Exception as e:
             log.error("Error updating and publishing message")
             log.error(e)
