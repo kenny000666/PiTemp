@@ -97,7 +97,7 @@ def main(argv):
         os.system("modprobe w1-therm")
 
     if (debug):
-        base_dir = 'C:\\Users\\kenny\\Documents\\dev\\PiTemp\\'
+        base_dir = 'C:\\Users\\kenny\\Documents\\dev\\Python\\PiTemp\\'
     else:
         base_dir = '/sys/bus/w1/devices/'
 
@@ -136,16 +136,19 @@ def main(argv):
 
                 
                 if (not debug or host != None):
-                    msg = [{"topic": topic + "/" + probeName , "payload": "{ unit: " + unit + " value : " + str(temperature) + "}" , "qos": 2, "retain": "false"}]
+                    msg = {"topic": topic + "/" + probeName , "payload": """{ "unit" : """ + unit + """",  "value" : """ + str(temperature) + "}" , "qos": 2, 'retain': "false"}
+                    #msg = {"topic: test", "payload: test"}
+                    log.debug("Message: %s", msg)
                     mqttmsg.append(msg)
-            if (not debug or host != None):
-                log.debug("Publishing to %s:%s %s", host, port, os.path.basename(__file__) + str(os.getpid()))
-                publish.multiple(mqttmsg, hostname="mqtt", port=int(port), client_id=os.path.basename(__file__) + str(os.getpid()), auth=False, transport="tcp")
-                log.info("Message Published")
-            time.sleep(5)
+            #if (not debug or host != None):
+                    log.debug("Publishing to %s:%s %s", host, port, os.path.basename(__file__) + str(os.getpid()))
+                    publish.single(msg, hostname=host, port=int(port), client_id=os.path.basename(__file__) + str(os.getpid()), auth=False, transport="tcp")
+                    log.info("Message Published")
         except Exception as e:
             log.error("Error updating and publishing message")
             log.error(e)
+        finally:
+            time.sleep(5)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
