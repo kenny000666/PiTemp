@@ -12,10 +12,11 @@ import configparser
 import atexit
 
 log = None
+
 mqttClient = None
 
 def exit_handler():
-    mqttClient.
+    mqttClient.disconnect
 
 def initLogger(name, file):
     global log
@@ -26,7 +27,7 @@ def initLogger(name, file):
         fileHandler = logging.handlers.RotatingFileHandler(filename=os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/" + name + ".log"),maxBytes=1000,backupCount=10)
         log.addHandler(fileHandler)
     log.addHandler(soh)
-    log.setLevel(logging.info)
+    log.setLevel(logging.DEBUG)
 
 def read_temp_raw(file):
     f = open(file, 'r')
@@ -139,7 +140,8 @@ def main(argv):
             log.error(e)      
             exit()  
 
-    global mqttClient = Client.Client(client_id=os.path.basename(__file__))
+    global mqttClient
+    mqttClient = Client.Client(client_id=os.path.basename(__file__))
     try:
         mqttClient.connect(host,port=int(port))
         connected = True
@@ -148,31 +150,28 @@ def main(argv):
         log.error(e)
         connected = False
 
-    while True:
-        try:
-            
-            tempfiles = glob.glob(base_dir + '28*/w1_slave', recursive=True)
-            for file in tempfiles:
-                probeName = os.path.basename(os.path.dirname(file))
-                temperature = read_temp(file, unit)
-                log.debug( probeName + " : " + str(temperature))
+    
 
-                
+    while True:
+        tempfiles = glob.glob(base_dir + '28*/w1_slave', recursive=True)
+        for file in tempfiles:
+            probeName = os.path.basename(os.path.dirname(file))
+            temperature = read_temp(file, unit)
+            log.debug( probeName + " : " + str(temperature))
+        error = False
+        retry = 0
+        while (not error and retry <= 3):
+            try:
                 if (not debug or connected):
-                    #msg = {"topic": topic + "/" + probeName , "payload": { "unit" : unit,  "value" : temperature } , "qos": 2, 'retain': "false"}
-                    #msg = {'topic': 'test', 'payload': 'test'}
-                    #log.debug("Message: %s", msg)
-                    #mqttmsg.append({'topic': 'test', 'payload': 'test'})
-            
-                    #log.debug("Publishing to %s:%s %s", host, port, os.path.basename(__file__) + str(os.getpid()))
-                    mqttClient.publish(topic + "/" + probeName, payload=str(temperature), qos=1)
-                    
+                    mqttClient.publish(topic + "/" + probeName, payload=str(temperature), qos=1)                
                     log.debug("Message Published")
-        except Exception as e:
-            log.error("Error updating and publishing message")
-            log.error(e)
-        finally:
-            time.sleep(5)
+            except Exception as e:
+                log.error("Error updating and publishing message")
+                log.error(e)
+                error = True
+                sys.exit(2)
+        
+        time.sleep(5)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
