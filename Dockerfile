@@ -7,6 +7,8 @@ WORKDIR /PiTemp
 
 RUN pip install -r requirements.txt
 
-ENV MQTT=value
+ENV HOST=mqtt
+ENV PORT=1883
+ENV TOPIC=home/pond/temperature
 
-ENTRYPOINT [ "python PiTemp.py" ]
+ENTRYPOINT [ "python PiTemp.py --Host $HOST --Port $PORT --Topic $TOPIC" ]
