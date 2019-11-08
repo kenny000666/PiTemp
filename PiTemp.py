@@ -60,7 +60,11 @@ def main(argv):
 
     if (argv != None):
         try:
-            opts, args = getopt.getopt(argv, 'hodul:', ['Config=', 'Topic=', 'Host=', 'Port=' ] )
+            opts, args = getopt.getopt(argv, 'hodul:', ['Topic=', 'Host=', 'Port=' ] )
+
+            initLogger(os.path.basename(__file__), logToFile)
+            log.info("Initializing " + os.path.basename(__file__) + "...")
+
 
             for opt, arg in opts:
                 if opt in '-h':
@@ -103,10 +107,6 @@ def main(argv):
             print("Error reading parameters")
             print(e) 
             sys.exit(1)
-
-    initLogger(os.path.basename(__file__), logToFile)
-    log.info("Initializing " + os.path.basename(__file__) + "...")
-
 
     if (not debug):
         os.system("modprobe w1-gpio")
@@ -158,19 +158,22 @@ def main(argv):
             probeName = os.path.basename(os.path.dirname(file))
             temperature = read_temp(file, unit)
             log.debug( probeName + " : " + str(temperature))
-        error = False
-        retry = 0
-        while (not error and retry <= 3):
-            try:
-                if (not debug or connected):
-                    mqttClient.publish(topic + "/" + probeName, payload=str(temperature), qos=1)                
-                    log.debug("Message Published")
-            except Exception as e:
-                log.error("Error updating and publishing message")
-                log.error(e)
-                error = True
-                sys.exit(2)
+            error = False
+            retry = 0
+            while (not error and retry <= 3):
+                try:
+                    if (not debug or connected):
+                        mqttClient.publish(topic + "/" + probeName, payload=str(temperature), qos=1)                
+                        log.debug("Message Published")
+                except Exception as e:
+                    log.error("Error updating and publishing message")
+                    log.error(e)
+                    error = True
+                    sys.exit(2)
         
         time.sleep(5)
- 
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+    
 
