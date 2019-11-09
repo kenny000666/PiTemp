@@ -153,24 +153,27 @@ def main(argv):
     
 
     while True:
+        log.debug("looking for files in: %s", base_dir)
         tempfiles = glob.glob(base_dir + '28*/w1_slave', recursive=True)
+        log.debug("Files found " + str(len(tempfiles)))
         for file in tempfiles:
             probeName = os.path.basename(os.path.dirname(file))
             temperature = read_temp(file, unit)
             log.debug( probeName + " : " + str(temperature))
-            error = False
+            published = False
             retry = 0
-            while (not error and retry <= 3):
+            while (not published and retry <= 3):
                 try:
                     if (not debug or connected):
                         mqttClient.publish(topic + "/" + probeName, payload=str(temperature), qos=1)                
                         log.debug("Message Published")
+                        published = True
                 except Exception as e:
                     log.error("Error updating and publishing message")
                     log.error(e)
-                    error = True
+                    published = False
                     sys.exit(2)
-        
+        log.debug("Sleeping")
         time.sleep(5)
 
 if __name__ == "__main__":
