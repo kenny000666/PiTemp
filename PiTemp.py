@@ -166,7 +166,7 @@ def main(argv):
                 try:
                     if (not debug or connected):
                         mqttClient.publish(topic + "/" + probeName, payload=str(temperature), qos=1)                
-                        log.debug("Message Published")
+                        log.debug("Message Published to topic %s", topic + "/" probeName)
                         published = True
                 except Exception as e:
                     log.error("Error updating and publishing message")
