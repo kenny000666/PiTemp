@@ -49,6 +49,14 @@ def read_temp(file, unit):
             return temp_c
         else: return temp_f
 
+def on_connect(client, userdata, flags, rc):
+    log.info("Connected To: " + client.hostname)
+    if rc==0:
+        print("connected OK Returned code=",rc)
+    else:
+        print("Bad connection Returned code=",rc)
+
+
 def main(argv): 
     logToFile = False
     debug = False
@@ -108,12 +116,12 @@ def main(argv):
             print(e) 
             sys.exit(1)
 
-    if (not debug):
-        os.system("modprobe w1-gpio")
-        os.system("modprobe w1-therm")
+    # if (not debug):
+    #     os.system("modprobe w1-gpio")
+    #     os.system("modprobe w1-therm")
 
     if (debug):
-        base_dir = 'C:\\Users\\kenny\\Documents\\dev\\Python\\PiTemp\\'
+        base_dir = os.path.normpath(os.path.dirname(os.path.realpath(__file__))) + "\\"
     else:
         base_dir = '/sys/bus/w1/devices/'
 
@@ -141,21 +149,19 @@ def main(argv):
             exit()  
 
     global mqttClient
-    mqttClient = Client.Client(client_id=os.path.basename(__file__))
-    try:
-        mqttClient.connect(host,port=int(port))
-        connected = True
-    except Exception as e:
-        log.error("Error connecting to mqtt broker")
-        log.error(e)
-        connected = False
-
-    
+    mqttClient = Client.Client(client_id=os.path.basename(__file__)) 
+    mqttClient.on_connect = on_connect
+    mqttClient.loop_start()
+    log.debug("Connecting to client: %s", host)
+    rc = mqttClient.connect(host,port=int(port))
+    log.info("RC: " + str(rc))
+ 
 
     while True:
         log.debug("looking for files in: %s", base_dir)
         tempfiles = glob.glob(base_dir + '28*/w1_slave', recursive=True)
         log.debug("Files found " + str(len(tempfiles)))
+ 
         for file in tempfiles:
             probeName = os.path.basename(os.path.dirname(file))
             temperature = read_temp(file, unit)
@@ -164,7 +170,7 @@ def main(argv):
             retry = 0
             while (not published and retry <= 3):
                 try:
-                    if (not debug or connected):
+                    if (not debug):
                         mqttClient.publish(topic + "/" + probeName, payload=str(temperature), qos=1)                
                         log.debug("Message Published to topic %s", topic + "/" + probeName)
                         published = True
